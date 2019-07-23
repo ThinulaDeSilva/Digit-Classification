@@ -3,6 +3,8 @@ import keras
 from keras.models import Sequential
 from keras.optimizers import SGD
 from keras.layers import Dense, Conv2D, Dropout, Flatten, MaxPooling2D
+import numpy as np
+import sklearn.metrics as metrics
 import time
 
 
@@ -64,5 +66,10 @@ print("Initialization took %.3f seconds" %initTime)
 print("Compilation took %.3f seconds" %compTime)
 print("Evaluation took %.3f seconds" %evalTime)
 print(results)
+
+predict = model.predict(X_test)
+pred_labels = np.argmax(predict, axis=1)
+confusion_matrix = metrics.confusion_matrix(Y_test, pred_labels)
+print(confusion_matrix)
 
 model.save("Model.h5")
