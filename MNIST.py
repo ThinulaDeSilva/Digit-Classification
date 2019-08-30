@@ -6,6 +6,7 @@ from keras.layers import Dense, Conv2D, Dropout, Flatten, MaxPooling2D
 import numpy as np
 import sklearn.metrics as metrics
 import time
+from keras.utils import plot_model
 
 
 def build_dataset():
@@ -32,7 +33,7 @@ def init_model(input_shape):
     model.add(MaxPooling2D(pool_size=(2, 2)))
     model.add(Conv2D(56, kernel_size=(3, 3), activation='relu'))
     model.add(MaxPooling2D(pool_size=(2, 2)))
-    model.add(Flatten()) # Flattening the 2D arrays for fully connected layers
+    model.add(Flatten())  # Flattening the 2D arrays for fully connected layers
     model.add(Dense(128, activation=tf.nn.relu))
     model.add(Dropout(0.2))
     model.add(Dense(10, activation=tf.nn.softmax))
@@ -72,4 +73,4 @@ pred_labels = np.argmax(predict, axis=1)
 confusion_matrix = metrics.confusion_matrix(Y_test, pred_labels)
 print(confusion_matrix)
 
-model.save("Model.h5")
+#model.save("Model.h5")

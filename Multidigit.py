@@ -3,53 +3,62 @@ import numpy as np
 from keras.models import load_model
 import CoreImageAnalysis as core
 
+# This code is used to label the multi-digit numbers. It takes a look at the core images and tries to identify
+# the numbers in the digit labels (mainly the first and last one) so that the files can be automatically named.
+
 model = load_model("Model.h5")
 # Read the input image
-exampleNum = 5
-image = cv.imread(r"C:\Users\GoldSpot_Cloudberry\OneDrive - Goldspot Discoveries Inc\Documents\Goldspot\Core Images\Digit Classification\Example " + str(exampleNum)+".png")
+exampleNum = 2
+image = cv.imread(r"C:\Users\GoldSpot_Cloudberry\OneDrive - Goldspot Discoveries Inc\Documents\Goldspot\Core Images\Digit Classification\Example " + str(exampleNum)+".jpg")
 print(image.shape)
-height = 600
+height = 300
 width = image.shape[1]*height//(2*image.shape[0])
-image = cv.resize(image, (height, width))
+print(image.shape)
 
 # Convert to grayscale and apply Gaussian filtering
 gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
 gray = cv.GaussianBlur(gray, (5, 5), 0)
 
-# mser = cv.MSER_create()
-# vis = image.copy()
-# regions = mser.detectRegions(image)
-#
-# hulls = [cv.convexHull(p.reshape(-1, 1, 2)) for p in regions[0]]
-# print(len(hulls))
-#
-# newHulls = [hull for hull in hulls if 300 <= cv.contourArea(hull) <= 1000]
-# cv.polylines(vis, newHulls, 1, (0, 255, 0))
-# print(len(newHulls))
-# cv.imshow('img', vis)
-# cv.waitKey()
+# this function is used to identify the labels in the middle of the image
+# currently doesn't return something, but this should be changed so that it does
+def detectMiddleLabels():
+    # uses the contour code to identify the location of the cores
+    grayCopy = gray.copy()
+    imageArea = grayCopy.shape[0] * grayCopy.shape[1]
+    maskImg, coreContours = core.drawContours(grayCopy, (int(imageArea / 100), int(imageArea / 50)))
+    print("There are %d contours" % (len(coreContours)))
 
-grayCopy = gray.copy()
-  # Thresholding the image
-#maskImg = 255-thresh
-coreContours = core.drawContours(grayCopy, 0)#thresh, 0)
-cv.drawContours(grayCopy, coreContours, -1, (0, 255, 0), 3)
-cv.waitKey()
-print("There are %d contours" %(len(coreContours)))
+    tree = core.sortContours(maskImg, coreContours)
+    while bool(tree):
+        # we construct a list of candidates containing all nodes that are leaves in the dependency tree
+        candidates = []
+        candConts = []
 
-# # Defining a kernel length
-# kernel_length = np.array(image).shape[1]//40
-# # A verticle kernel of (1 X kernel_length), which will detect all the verticle lines from the image.
-# verticle_kernel = cv.getStructuringElement(cv.MORPH_RECT, (1, kernel_length))
-# # A horizontal kernel of (kernel_length X 1), which will help to detect all the horizontal line from the image.
-# hori_kernel = cv.getStructuringElement(cv.MORPH_RECT, (kernel_length, 1))
-# # A kernel of (3 X 3) ones.
-# kernel = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
-#
-# # Morphological operation to detect verticle lines from an image
-# img_temp1 = cv.erode(maskImg, verticle_kernel, iterations=3)
-# verticle_lines_img = cv.dilate(img_temp1, verticle_kernel, iterations=3)
-# cv.imwrite("verticle_lines.png", verticle_lines_img)
+        for node in tree.values():
+            if node.is_leaf():
+                candidates.append(node.index)
+                candConts.append(coreContours[node.index])
+
+        if len(candidates) > 2:
+            print("Something is weird")
+        elif len(candidates) == 2:
+            rectangles = core.extractContours(candConts)
+            # writing out each four arrays separately to maintain UMAT type for src_pts
+            point1 = [rectangles[0][1][0], rectangles[0][1][1]]
+            point2 = [rectangles[1][0][0], rectangles[1][0][1]]
+            point3 = [rectangles[1][3][0], rectangles[1][3][1]]
+            point4 = [rectangles[0][2][0], rectangles[0][2][1]]
+            # since these contours are sorted left to right, we know rectangles[0] is to the left of rectangles[1]
+            src_pts = np.array([point1, point2, point3, point4], dtype="float32")
+
+            core.computeHomography(image, src_pts)
+
+        candidates.sort(key=lambda n: tree[n].depth())
+
+        # add the best contour to our sorted list and completely remove that contour from the dependency tree
+        bestContour = tree.pop(candidates[0])
+        for node in tree.values():
+            node.remove_dependency(candidates[0])
 
 # Threshold the image
 flag, thresh = cv.threshold(gray, 90, 255, cv.THRESH_BINARY_INV)
@@ -61,10 +70,7 @@ contours, hierarchy = cv.findContours(thresh, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_
 rectangles = []
 for ctr in contours:
     area = cv.contourArea(ctr)
-    if area >= 1000:
-        print(area)
-        rectangles.append(cv.boundingRect(ctr))
-#rectangles = [cv.boundingRect(ctr) for ctr in contours]
+    rectangles.append(cv.boundingRect(ctr))
 print(len(rectangles))
 
 # For each rectangular region, resize/normalize image then feed into MNIST model
@@ -90,6 +96,8 @@ for rect in rectangles:
     predNum = np.around(predNum, 3)
     print(predNum, number)
     cv.putText(image, str(number), (rect[0], rect[1]), cv.FONT_HERSHEY_DUPLEX, 2, (0, 255, 255), 3)
+    cv.imwrite("Detected.png", image)
 
 cv.imshow("Resulting Image with Rectangular ROIs", image)
+cv.imwrite("Result.png", image)
 cv.waitKey()
